@@ -3,369 +3,175 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERPH Desa Bakti - Sistem Pengurusan Pembelajaran</title>
-    <!-- Tailwind CSS for Styling -->
+    <title>eRPH Prasekolah - Desa Bakti</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React and Lucide Icons -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/lucide-react"></script>
-    <!-- Firebase Libraries -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, setDoc, query, where, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-
-        // Global Firebase state
-        window.FirebaseCore = { initializeApp, getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, setDoc, query, where, writeBatch, getDocs, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged };
-    </script>
-
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
-        
-        body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: #f8fafc;
-        }
-
-        @media print {
-            .no-print { display: none !important; }
-            .print-only { display: block !important; }
-            body { background: white !important; padding: 0 !important; margin: 0 !important; }
-            .page-break { page-break-before: always; }
-        }
-
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #e2e8f0;
-            border-radius: 10px;
-        }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
-<body>
-    <div id="root"></div>
+<body class="bg-slate-50 min-h-screen pb-20">
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo } = React;
-        const { 
-            Plus, Save, Trash2, Edit3, Printer, User, ShieldCheck, PenTool, 
-            ChevronDown, ChevronUp, Lock, LogOut, Folder, X, FileText, 
-            Settings, Grid, AlertTriangle, School, Calendar, Layers, 
-            Sparkles, Info, CheckCircle, CheckSquare, Square 
-        } = lucide;
+    <nav class="bg-indigo-700 text-white p-4 sticky top-0 z-50 flex justify-between items-center shadow-lg">
+        <div class="flex items-center gap-2">
+            <div class="bg-white/20 p-2 rounded-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            </div>
+            <div class="text-xs uppercase font-bold">
+                NAMA GURU <br/>
+                <span class="text-[10px] opacity-60 text-indigo-200">GURU • SK DESA BAKTI</span>
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <button class="bg-rose-500 p-2 rounded-lg hover:bg-rose-600 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            </button>
+        </div>
+    </nav>
 
-        // Configuration - Note: __firebase_config and __app_id are provided by environment
-        const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
-        const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'erph-desa-bakti-v3';
-
-        // Constants - Replicating original settings
-        const JAWATAN_ADMIN = ["GURU BESAR", "GPK PENTADBIRAN", "GPK HEM", "GPK KOKURIKULUM"];
-        const MINGGU_LIST = Array.from({ length: 45 }, (_, i) => `Minggu ${i + 1}`);
-        const HARI_LIST = ["Isnin", "Selasa", "Rabu", "Khamis", "Jumaat"];
+    <div class="p-4 max-w-5xl mx-auto space-y-6">
         
-        // Mocking the original logic structure
-        function App() {
-            const [user, setUser] = useState(null);
-            const [loading, setLoading] = useState(true);
-            const [activeTab, setActiveTab] = useState('dashboard');
-            const [records, setRecords] = useState([]);
+        <div class="bg-white p-6 rounded-3xl shadow-sm border border-indigo-100 flex flex-col items-center">
+            <h2 class="font-bold mb-4 flex items-center gap-2 text-indigo-700 w-full uppercase">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Tambah RPH Baru
+            </h2>
             
-            // Signature State
-            const [adminJawatan, setAdminJawatan] = useState(JAWATAN_ADMIN[0]);
-            const [adminNamaPenyemak, setAdminNamaPenyemak] = useState('');
-            const canvasRef = useRef(null);
-            const [isDrawing, setIsDrawing] = useState(false);
-
-            useEffect(() => {
-                const { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore } = window.FirebaseCore;
-                const auth = getAuth();
+            <form class="w-full space-y-4 max-w-3xl">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <select class="p-3 border rounded-xl text-sm font-bold bg-slate-50 outline-none focus:border-indigo-500">
+                        <option>Minggu 1</option><option>Minggu 2</option><option>Minggu 3</option>
+                    </select>
+                    <select class="p-3 border rounded-xl text-sm font-bold bg-slate-50 outline-none">
+                        <option>Isnin</option><option>Selasa</option><option>Rabu</option><option>Khamis</option><option>Jumaat</option>
+                    </select>
+                    <input type="date" class="p-3 border rounded-xl text-sm font-bold bg-slate-50 outline-none" value="2026-01-25">
+                    <select class="p-3 border rounded-xl text-sm font-bold bg-slate-50 outline-none">
+                        <option value="">Pilih Kelas</option>
+                    </select>
+                </div>
                 
-                const initAuth = async () => {
-                    try {
-                        if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
-                            await signInWithCustomToken(auth, window.__initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch (error) {
-                        console.error("Auth error:", error);
-                    }
-                };
+                <div class="space-y-1">
+                    <label class="text-[10px] font-bold uppercase text-slate-400 ml-1">Tajuk RPH</label>
+                    <input type="text" placeholder="Masukkan Tajuk..." class="w-full p-3 border rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-100">
+                </div>
 
-                initAuth();
-                const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
-                    setUser(u);
-                    setLoading(false);
-                });
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold uppercase text-slate-400 ml-1">Masa Mula</label>
+                        <input type="time" class="w-full p-3 border rounded-xl text-sm font-bold bg-slate-50 outline-none">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold uppercase text-slate-400 ml-1">Masa Tamat</label>
+                        <input type="time" class="w-full p-3 border rounded-xl text-sm font-bold bg-slate-50 outline-none">
+                    </div>
+                </div>
 
-                return () => unsubscribeAuth();
-            }, []);
+                <div class="space-y-4">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold uppercase text-slate-400 ml-1">Bidang Pembelajaran</label>
+                        <select class="w-full p-3 border rounded-xl text-xs font-bold bg-slate-50">
+                            <option>Pilih Bidang Pembelajaran...</option>
+                            <option>Sosioemosi</option>
+                            <option>Fizikal dan Kesejahteraan Diri</option>
+                            <option>Kerohanian, Nilai dan Kewarganegaraan</option>
+                            <option>Bahasa dan Literasi</option>
+                            <option>Kognitif</option>
+                            <option>Kreativiti dan Estetika</option>
+                        </select>
+                    </div>
+                    
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold uppercase text-slate-400 ml-1">Standard Pembelajaran (SP)</label>
+                        <select class="w-full p-3 border rounded-xl text-xs font-bold mb-2">
+                            <option value="">Pilih SP...</option>
+                        </select>
+                        <button type="button" class="flex items-center gap-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full hover:bg-indigo-100 active:scale-95 transition-all">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-600"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path><path d="M5 3v4"></path><path d="M19 17v4"></path><path d="M3 5h4"></path><path d="M17 19h4"></path></svg>
+                            JANA OBJEKTIF & AKTIVITI (AI)
+                        </button>
+                    </div>
 
-            useEffect(() => {
-                if (!user) return;
-                const { getFirestore, collection, onSnapshot } = window.FirebaseCore;
-                const db = getFirestore();
-                
-                // Fetch public data
-                const q = collection(db, 'artifacts', appId, 'public', 'data', 'erph_records');
-                const unsubscribe = onSnapshot(q, (snapshot) => {
-                    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    setRecords(data);
-                }, (error) => console.error("Firestore error:", error));
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold uppercase text-slate-400 ml-1">Objektif</label>
+                        <textarea placeholder="Taip objektif..." class="w-full p-3 border rounded-xl text-sm font-bold h-24 leading-relaxed outline-none"></textarea>
+                    </div>
 
-                return () => unsubscribe();
-            }, [user]);
-
-            // Drawing logic
-            const startDrawing = (e) => {
-                const canvas = canvasRef.current;
-                const ctx = canvas.getContext('2d');
-                const rect = canvas.getBoundingClientRect();
-                const x = (e.clientX || e.touches[0].clientX) - rect.left;
-                const y = (e.clientY || e.touches[0].clientY) - rect.top;
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                setIsDrawing(true);
-            };
-
-            const draw = (e) => {
-                if (!isDrawing) return;
-                const canvas = canvasRef.current;
-                const ctx = canvas.getContext('2d');
-                const rect = canvas.getBoundingClientRect();
-                const x = (e.clientX || e.touches[0].clientX) - rect.left;
-                const y = (e.clientY || e.touches[0].clientY) - rect.top;
-                ctx.lineTo(x, y);
-                ctx.stroke();
-            };
-
-            const saveWeeklySignature = () => {
-                // Placeholder for signature saving logic
-                const canvas = canvasRef.current;
-                const dataUrl = canvas.toDataURL();
-                console.log("Signature saved", dataUrl);
-                // Clear canvas after save
-                const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            };
-
-            if (loading) {
-                return (
-                    <div className="flex h-screen items-center justify-center bg-slate-50">
-                        <div className="flex flex-col items-center gap-4">
-                            <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-                            <p className="text-slate-500 font-bold animate-pulse uppercase tracking-widest text-xs">Memuatkan Sistem...</p>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold uppercase text-slate-400 ml-1">Aktiviti</label>
+                        <textarea placeholder="Taip aktiviti..." class="w-full p-3 border rounded-xl text-sm font-bold h-24 leading-relaxed outline-none"></textarea>
+                        
+                        <div class="mt-2 flex flex-col space-y-2">
+                            <label class="text-[10px] font-bold uppercase text-slate-400 ml-1">Sumber Pendidikan</label>
+                            <div class="flex flex-wrap gap-3 p-3 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="abm" class="rounded text-indigo-600">
+                                    <label for="abm" class="text-[10px] font-bold uppercase text-slate-600">ABM</label>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="bbm" class="rounded text-indigo-600">
+                                    <label for="bbm" class="text-[10px] font-bold uppercase text-slate-600">BBM</label>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="ict" class="rounded text-indigo-600">
+                                    <label for="ict" class="text-[10px] font-bold uppercase text-slate-600">ICT</label>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                );
-            }
+                </div>
+                
+                <button type="submit" class="w-full bg-indigo-600 text-white p-4 rounded-xl font-bold uppercase shadow-lg hover:bg-indigo-700 transition-all active:scale-[0.98]">
+                    Simpan Rekod RPH
+                </button>
+            </form>
+        </div>
 
-            return (
-                <div className="min-h-screen bg-slate-50 pb-20 lg:pb-0 lg:pl-64">
-                    {/* Sidebar / Navigation */}
-                    <nav className="no-print fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 p-2 flex justify-around items-center z-50 lg:top-0 lg:left-0 lg:h-full lg:w-64 lg:flex-col lg:justify-start lg:gap-2 lg:p-4 lg:border-r">
-                        <div className="hidden lg:flex items-center gap-3 px-2 py-6 w-full mb-4">
-                            <div className="bg-emerald-600 p-2 rounded-xl shadow-lg shadow-emerald-200">
-                                <School className="text-white w-6 h-6" />
-                            </div>
-                            <div>
-                                <h1 className="font-extrabold text-slate-800 text-sm leading-tight tracking-tight uppercase">ERPH Desa Bakti</h1>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">v3.0 Official</p>
-                            </div>
-                        </div>
+        <hr class="border-slate-200">
 
-                        <button 
-                            onClick={() => setActiveTab('dashboard')}
-                            className={`flex flex-col lg:flex-row items-center gap-1 lg:gap-3 p-2 lg:p-4 rounded-xl w-full transition-all ${activeTab === 'dashboard' ? 'bg-emerald-50 text-emerald-600' : 'text-slate-400 hover:bg-slate-50'}`}
-                        >
-                            <Grid size={20} />
-                            <span className="text-[10px] lg:text-sm font-bold uppercase">Dashboard</span>
-                        </button>
-                        
-                        <button 
-                            onClick={() => setActiveTab('records')}
-                            className={`flex flex-col lg:flex-row items-center gap-1 lg:gap-3 p-2 lg:p-4 rounded-xl w-full transition-all ${activeTab === 'records' ? 'bg-emerald-50 text-emerald-600' : 'text-slate-400 hover:bg-slate-50'}`}
-                        >
-                            <FileText size={20} />
-                            <span className="text-[10px] lg:text-sm font-bold uppercase">Rekod ERPH</span>
-                        </button>
-
-                        <button 
-                            onClick={() => setActiveTab('admin')}
-                            className={`flex flex-col lg:flex-row items-center gap-1 lg:gap-3 p-2 lg:p-4 rounded-xl w-full transition-all ${activeTab === 'admin' ? 'bg-emerald-50 text-emerald-600' : 'text-slate-400 hover:bg-slate-50'}`}
-                        >
-                            <ShieldCheck size={20} />
-                            <span className="text-[10px] lg:text-sm font-bold uppercase">Semakan</span>
-                        </button>
-                    </nav>
-
-                    {/* Main Content Area */}
-                    <main className="p-4 lg:p-8 max-w-7xl mx-auto">
-                        {activeTab === 'dashboard' && (
-                            <div className="space-y-6">
-                                <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                    <div>
-                                        <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Selamat Datang</h2>
-                                        <p className="text-slate-500 font-medium text-sm">Sistem Pengurusan Rekod Persediaan Mengajar Digital</p>
-                                    </div>
-                                    <div className="bg-white p-4 rounded-2xl border flex items-center gap-4 shadow-sm">
-                                        <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Calendar size={20}/></div>
-                                        <div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">Tarikh Hari Ini</p>
-                                            <p className="text-sm font-extrabold text-slate-700">{new Date().toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                                        </div>
-                                    </div>
-                                </header>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="bg-white p-6 rounded-3xl border shadow-sm border-slate-100 flex items-center gap-5">
-                                        <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600"><FileText size={28}/></div>
-                                        <div>
-                                            <p className="text-3xl font-black text-slate-800 leading-none">{records.length}</p>
-                                            <p className="text-xs font-bold text-slate-400 uppercase mt-1">Jumlah ERPH</p>
-                                        </div>
-                                    </div>
-                                    <div className="bg-white p-6 rounded-3xl border shadow-sm border-slate-100 flex items-center gap-5">
-                                        <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600"><Layers size={28}/></div>
-                                        <div>
-                                            <p className="text-3xl font-black text-slate-800 leading-none">12</p>
-                                            <p className="text-xs font-bold text-slate-400 uppercase mt-1">Minggu Berjalan</p>
-                                        </div>
-                                    </div>
-                                    <div className="bg-white p-6 rounded-3xl border shadow-sm border-slate-100 flex items-center gap-5">
-                                        <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600"><CheckCircle size={28}/></div>
-                                        <div>
-                                            <p className="text-3xl font-black text-slate-800 leading-none">{records.filter(r => r.semakan_status === 'DISAHKAN').length}</p>
-                                            <p className="text-xs font-bold text-slate-400 uppercase mt-1">Telah Disahkan</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {activeTab === 'admin' && (
-                            <div className="bg-white p-6 rounded-3xl border shadow-sm space-y-6">
-                                <div className="flex items-center gap-3">
-                                    <PenTool className="text-emerald-600" />
-                                    <h3 className="font-black text-slate-800 uppercase tracking-tight">Panel Pengesahan Mingguan</h3>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-bold uppercase text-slate-400">Jawatan Penyemak</label>
-                                        <select 
-                                            value={adminJawatan} 
-                                            onChange={e => setAdminJawatan(e.target.value)} 
-                                            className="w-full p-3 border rounded-xl text-sm font-bold outline-none bg-slate-50"
-                                        >
-                                           {JAWATAN_ADMIN.map(j => <option key={j} value={j}>{j}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-bold uppercase text-slate-400">Nama Penyemak (Huruf Besar)</label>
-                                        <input 
-                                            type="text" 
-                                            value={adminNamaPenyemak} 
-                                            onChange={e => setAdminNamaPenyemak(e.target.value.toUpperCase())} 
-                                            placeholder="NAMA PENUH PENYEMAK..." 
-                                            className="w-full p-3 border rounded-xl text-sm font-bold outline-none bg-slate-50 uppercase" 
-                                        />
-                                    </div>
-                                </div>
-                                
-                                <div className="space-y-1 w-full flex flex-col items-center">
-                                    <label className="text-[10px] font-bold uppercase text-slate-400 self-start">Tandatangan Digital</label>
-                                    <div className="border-2 rounded-xl h-40 w-full bg-white touch-none overflow-hidden relative shadow-inner">
-                                        <canvas 
-                                            ref={canvasRef} 
-                                            width={400} 
-                                            height={200} 
-                                            className="w-full h-full cursor-crosshair" 
-                                            onMouseDown={startDrawing} 
-                                            onMouseMove={draw} 
-                                            onMouseUp={() => setIsDrawing(false)} 
-                                            onTouchStart={startDrawing} 
-                                            onTouchMove={draw} 
-                                            onTouchEnd={() => setIsDrawing(false)} 
-                                        />
-                                    </div>
-                                    <button 
-                                        onClick={() => {
-                                            const ctx = canvasRef.current.getContext('2d');
-                                            ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-                                        }}
-                                        className="text-[10px] font-bold text-rose-500 uppercase mt-2 flex items-center gap-1 hover:bg-rose-50 px-3 py-1 rounded-full transition-colors"
-                                    >
-                                        <Trash2 size={12}/> Padam Tandatangan
-                                    </button>
-                                </div>
-                                
-                                <button 
-                                    onClick={saveWeeklySignature} 
-                                    className="w-full bg-emerald-600 text-white p-4 rounded-2xl font-bold uppercase text-sm flex items-center justify-center gap-3 shadow-lg shadow-emerald-100 hover:bg-emerald-700 active:scale-[0.98] transition-all"
-                                >
-                                    <Save size={20} /> Simpan Pengesahan
-                                </button>
-                            </div>
-                        )}
-
-                        {activeTab === 'records' && (
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="font-black text-slate-800 uppercase tracking-tight">Senarai ERPH Anda</h3>
-                                    <button className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-2">
-                                        <Plus size={16}/> Tambah Baru
-                                    </button>
-                                </div>
-                                {records.length === 0 ? (
-                                    <div className="bg-white p-12 rounded-3xl border border-dashed border-slate-200 flex flex-col items-center text-center">
-                                        <div className="bg-slate-50 p-6 rounded-full mb-4"><FileText className="text-slate-300" size={48}/></div>
-                                        <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Tiada rekod dijumpai</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 gap-4">
-                                        {records.map(record => (
-                                            <div key={record.id} className="bg-white p-4 rounded-2xl border shadow-sm flex items-center justify-between">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="bg-emerald-50 p-3 rounded-xl text-emerald-600"><FileText size={20}/></div>
-                                                    <div>
-                                                        <h4 className="font-bold text-slate-800 text-sm uppercase">{record.subjek || 'Tiada Subjek'}</h4>
-                                                        <p className="text-[10px] text-slate-400 font-bold uppercase">{record.hari} | {record.minggu}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <button className="p-2 text-slate-400 hover:text-blue-500 transition-colors"><Edit3 size={18}/></button>
-                                                    <button className="p-2 text-slate-400 hover:text-rose-500 transition-colors"><Trash2 size={18}/></button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </main>
-
-                    {/* Footer / Status Bar */}
-                    <footer className="no-print hidden lg:flex fixed bottom-0 left-64 right-0 bg-white border-t p-2 px-6 justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        <div className="flex items-center gap-4">
-                            <span>Status: <span className="text-emerald-500">Connected</span></span>
-                            <span>App ID: {appId}</span>
+        <div class="space-y-4">
+            <h3 class="text-xs font-bold uppercase text-slate-400 px-1">Rekod Terkini</h3>
+            
+            <div class="bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col items-center">
+                <div class="p-4 w-full flex items-center justify-between cursor-pointer hover:bg-slate-50">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg flex items-center justify-center text-[12px] font-bold text-white bg-emerald-500 shadow-sm">
+                            M1
                         </div>
                         <div>
-                            &copy; 2024 SK DESA BAKTI - ERPH V3
+                            <p class="text-xs font-bold uppercase text-slate-800">Tajuk: Mengenal Abjad</p>
+                            <p class="text-[9px] font-semibold text-slate-400 uppercase">Isnin, 2026-01-26 • Kelas Amanah • Ditaksir</p>
                         </div>
-                    </footer>
+                    </div>
+                    <div class="text-emerald-500">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+                    </div>
                 </div>
-            );
-        }
+            </div>
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+            <div class="bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col items-center">
+                <div class="p-4 w-full flex items-center justify-between cursor-pointer hover:bg-slate-50">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg flex items-center justify-center text-[12px] font-bold text-white bg-amber-400 shadow-sm">
+                            M1
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold uppercase text-slate-800">Tajuk: Mari Membilang</p>
+                            <p class="text-[9px] font-semibold text-slate-400 uppercase">Selasa, 2026-01-27 • Kelas Amanah • Ditaksir</p>
+                        </div>
+                    </div>
+                    <div class="text-slate-300">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center py-6 opacity-30 text-[8px] font-bold uppercase tracking-[0.5em]">
+        Powered By GB Akbar & Tn. Hj. Hazidan @2026
+    </footer>
+
 </body>
 </html>

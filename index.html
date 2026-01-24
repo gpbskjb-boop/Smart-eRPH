@@ -1,0 +1,775 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  onSnapshot, 
+  doc, 
+  updateDoc, 
+  deleteDoc, 
+  setDoc,
+  query,
+  where,
+  writeBatch,
+  getDocs 
+} from 'firebase/firestore';
+import { 
+  getAuth, 
+  signInAnonymously, 
+  signInWithCustomToken, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { 
+  Plus, 
+  Save, 
+  Trash2, 
+  Edit3, 
+  Printer, 
+  User,
+  ShieldCheck, 
+  PenTool,
+  ChevronDown,
+  ChevronUp,
+  Lock,
+  LogOut,
+  Folder,
+  X,
+  FileText,
+  Settings,
+  Grid,
+  AlertTriangle,
+  School,
+  Calendar,
+  Layers,
+  Sparkles,
+  Info,
+  CheckCircle,
+  CheckSquare,
+  Square
+} from 'lucide-react';
+
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const apiKey = ""; 
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'erph-desa-bakti-v3';
+
+const MINGGU_LIST = Array.from({ length: 45 }, (_, i) => `Minggu ${i + 1}`);
+const HARI_LIST = ["Isnin", "Selasa", "Rabu", "Khamis", "Jumaat"];
+const JAWATAN_ADMIN = ["Guru Besar", "PK Pentadbiran", "PK HEM", "PK Kokurikulum", "Penyelaras"];
+const TUNJANG_LIST = [
+  "Sosioemosi",
+  "Fizikal dan Kesejahteraan Diri",
+  "Kerohanian, Nilai dan Kewarganegaraan", // Fixed text here
+  "Bahasa dan Literasi",
+  "Kognitif",
+  "Kreativiti dan Estetika"
+];
+
+const STRATEGI_LIST = ["ABM", "BBM", "ICT", "KBAT"];
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [currentUserData, setCurrentUserData] = useState(null);
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [viewMode, setViewMode] = useState('guru'); 
+  const [selectedWeekForSign, setSelectedWeekForSign] = useState(null); 
+  const [expandedRecordId, setExpandedRecordId] = useState(null);
+  const [selectedMinggu, setSelectedMinggu] = useState("Semua");
+  const [selectedUserFolder, setSelectedUserFolder] = useState(null);
+  const [activeTab, setActiveTab] = useState('records');
+  
+  const [loginInput, setLoginInput] = useState({ name: '', password: '', kodSekolah: '' });
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [schoolName, setSchoolName] = useState("SK DESA BAKTI");
+
+  const [selectedUserToDelete, setSelectedUserToDelete] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteType, setDeleteType] = useState(null); 
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [weekToDeleteSelection, setWeekToDeleteSelection] = useState(MINGGU_LIST[0]);
+  const [dateToDeleteSelection, setDateToDeleteSelection] = useState(new Date().toISOString().split('T')[0]);
+
+  const [dropdownOptions, setDropdownOptions] = useState({
+    sp: [], objektif: [], aktiviti: [], refleksi: [], kelas: [], subjek: []
+  });
+
+  const [bulkInput, setBulkInput] = useState({ type: 'sp', text: '', selectedBidang: TUNJANG_LIST[0] });
+  const [adminUlasan, setAdminUlasan] = useState("");
+  const [adminJawatan, setAdminJawatan] = useState(JAWATAN_ADMIN[0]);
+  const [adminNamaPenyemak, setAdminNamaPenyemak] = useState(""); 
+  const [adminExtraNote, setAdminExtraNote] = useState(""); 
+  const canvasRef = useRef(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+
+  const initialFormState = {
+    nama: "", 
+    kelas: "", 
+    mataPelajaran: "", 
+    minggu: MINGGU_LIST[0],
+    hari: HARI_LIST[0],
+    tarikh: new Date().toISOString().split('T')[0],
+    masaMula: "",
+    masaTamat: "",
+    tajuk: "",
+    tunjang: "",
+    sp: "", 
+    objektif: "", 
+    aktiviti: "", 
+    refleksi: "",
+    pentaksiran: "Ditaksir",
+    strategi: [] 
+  };
+
+  const [formData, setFormData] = useState(initialFormState);
+
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) { console.error("Auth error:", err); }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!user || !isLoggedIn || !currentUserData?.kodSekolah) return;
+    const kod = currentUserData.kodSekolah.toUpperCase();
+    const unsubRecords = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'schools', kod, 'erph_records'), (snapshot) => {
+      setRecords(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    }, (err) => console.error("Firestore error:", err));
+    const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'schools', kod, 'settings', 'dropdowns'), (docSnap) => {
+      if (docSnap.exists()) setDropdownOptions(docSnap.data());
+    });
+    const unsubSchool = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'schools', kod, 'settings', 'schoolInfo'), (docSnap) => {
+      if (docSnap.exists() && docSnap.data().name) setSchoolName(docSnap.data().name);
+    });
+    return () => { unsubRecords(); unsubSettings(); unsubSchool(); };
+  }, [user, isLoggedIn, currentUserData?.kodSekolah]);
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    const kod = loginInput.kodSekolah.trim().toUpperCase();
+    if (!kod) return alert("Sila masukkan Kod Sekolah!");
+    if (loginInput.password === "admin123" && viewMode === 'admin') {
+      setCurrentUserData({ name: loginInput.name, role: 'admin', kodSekolah: kod });
+      setIsLoggedIn(true);
+    } else if (viewMode === 'guru') {
+      setCurrentUserData({ nama: loginInput.name, role: 'guru', ic: loginInput.password, kodSekolah: kod });
+      setFormData(p => ({ ...p, nama: loginInput.name }));
+      setIsLoggedIn(true);
+    } else { alert("Maklumat salah!"); }
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setCurrentUserData(null);
+    setSelectedUserFolder(null);
+  };
+
+  const handleSaveSchoolName = async () => {
+    try {
+      const kod = currentUserData.kodSekolah.toUpperCase();
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schools', kod, 'settings', 'schoolInfo'), { name: schoolName });
+    } catch (e) { console.error(e); }
+  };
+
+  const handlePrint = (record) => {
+    const win = window.open('', '_blank');
+    const content = `
+      <html>
+        <head>
+          <title>eRPH - ${record.nama}</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <script src="https://cdn.tailwindcss.com"></script>
+          <style>
+            @media print {
+              .no-print { display: none !important; }
+              body { padding: 0; margin: 0; }
+              .print-container { border: none !important; padding: 20px !important; width: 100% !important; max-width: none !important; }
+            }
+          </style>
+        </head>
+        <body class="bg-white p-0 sm:p-10 flex flex-col items-center">
+          <div class="no-print w-full bg-indigo-700 p-4 sticky top-0 flex justify-center gap-4 shadow-lg z-50">
+             <button onclick="window.print()" class="bg-white text-indigo-700 px-8 py-3 rounded-full font-black text-sm uppercase shadow-xl flex items-center gap-2">
+               CETAK SEKARANG
+             </button>
+             <button onclick="window.close()" class="bg-rose-500 text-white px-8 py-3 rounded-full font-black text-sm uppercase shadow-xl">TUTUP</button>
+          </div>
+          <div class="print-container w-full max-w-4xl border-4 border-black p-8 mx-auto mt-4">
+            <h1 class="text-xl font-bold text-center mb-1 uppercase">${schoolName}</h1>
+            <h1 class="text-3xl font-bold text-center underline mb-8">REKOD PENGAJARAN HARIAN</h1>
+            <div class="grid grid-cols-2 gap-4 mb-8 text-lg">
+              <p><strong>NAMA:</strong> ${record.nama}</p>
+              <p><strong>MINGGU:</strong> ${record.minggu}</p>
+              <p><strong>HARI:</strong> ${record.hari || '-'}</p>
+              <p><strong>TARIKH:</strong> ${record.tarikh}</p>
+              <p><strong>MASA:</strong> ${record.masaMula || '-'} - ${record.masaTamat || '-'}</p>
+              <p><strong>KELAS:</strong> ${record.kelas}</p>
+              ${record.mataPelajaran ? `<p><strong>SUBJEK:</strong> ${record.mataPelajaran}</p>` : ''}
+              <p><strong>PENTAKSIRAN:</strong> ${record.pentaksiran || 'Ditaksir'}</p>
+            </div>
+            ${record.strategi && record.strategi.length > 0 ? `
+              <div class="mb-4">
+                <strong>SUMBER PENDIDIKAN:</strong> ${record.strategi.join(', ')}
+              </div>
+            ` : ''}
+            <div class="mb-6">
+              <p class="font-bold text-lg">TAJUK:</p>
+              <div class="border border-black p-2 min-h-[40px]">${record.tajuk || '-'}</div>
+            </div>
+            <div class="space-y-6">
+              ${record.tunjang ? `<div class="border-b-2 border-slate-200 pb-2"><strong>BIDANG PEMBELAJARAN:</strong> <p>${record.tunjang}</p></div>` : ''}
+              <div class="border-b-2 border-slate-200 pb-2"><strong>SP:</strong> <p>${record.sp}</p></div>
+              <div class="border-b-2 border-slate-200 pb-2"><strong>OBJEKTIF:</strong> <pre class="font-sans whitespace-pre-wrap">${record.objektif}</pre></div>
+              <div class="border-b-2 border-slate-200 pb-2"><strong>AKTIVITI:</strong> <pre class="font-sans whitespace-pre-wrap">${record.aktiviti}</pre></div>
+              <div class="bg-slate-100 p-4 italic"><strong>REFLEKSI:</strong> <pre class="font-sans whitespace-pre-wrap italic">${record.refleksi}</pre></div>
+            </div>
+            ${record.signed ? `
+              <div class="mt-12 text-center border-t-2 border-black pt-4 flex flex-col items-center">
+                <p class="mb-4">"${record.ulasan}"</p>
+                <img src="${record.signature}" class="h-24 mb-2" />
+                <p class="font-bold underline">${record.signedByNama || record.signedBy || ''}</p>
+                <p class="text-sm font-bold uppercase">${record.signedByJawatan || ''}</p>
+                ${record.adminExtraNote ? `<p class="text-sm mt-1">${record.adminExtraNote}</p>` : ''}
+                <p>${record.dateSigned}</p>
+              </div>
+            ` : ''}
+          </div>
+        </body>
+      </html>
+    `;
+    win.document.write(content);
+    win.document.close();
+  };
+
+  const handlePrintMatrix = () => {
+    const win = window.open('', '_blank');
+    const usersWithRecords = Array.from(new Set(records.map(r => r.nama)));
+    const tableBody = usersWithRecords.map(name => {
+      const row = MINGGU_LIST.map(m => {
+        const recs = records.filter(r => r.nama === name && r.minggu === m);
+        const signed = recs.length > 0 && recs.every(r => r.signed);
+        return `<td class="border border-black p-0 text-center text-[7px] ${signed ? 'bg-green-100' : ''}">${signed ? '✔' : ''}</td>`;
+      }).join('');
+      return `<tr><td class="border border-black p-1 font-bold text-[9px] uppercase text-left bg-white whitespace-nowrap min-w-[150px] overflow-hidden">${name}</td>${row}</tr>`;
+    }).join('');
+    win.document.write(`
+      <html>
+        <head>
+          <title>Matriks Penghantaran - ${schoolName}</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <style>
+            @media print { 
+              .no-print { display: none !important; } 
+              @page { size: landscape; margin: 5mm; }
+              body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; }
+              .page-container { width: 100% !important; box-shadow: none !important; border: none !important; margin: 0 !important; max-width: none !important; }
+              table { width: 100% !important; border-collapse: collapse !important; table-layout: fixed; }
+              th, td { border: 1px solid black !important; word-wrap: break-word; }
+            }
+          </style>
+        </head>
+        <body class="p-0 flex flex-col items-center">
+          <div class="no-print w-full bg-indigo-700 p-4 sticky top-0 flex justify-center gap-4 shadow-lg z-50 mb-6">
+             <button onclick="window.print()" class="bg-white text-indigo-700 px-8 py-3 rounded-full font-black text-sm uppercase shadow-xl flex items-center gap-2">CETAK MATRIKS</button>
+             <button onclick="window.close()" class="bg-rose-500 text-white px-8 py-3 rounded-full font-black text-sm uppercase shadow-xl">TUTUP</button>
+          </div>
+          <div class="page-container bg-white p-4 w-full max-w-[297mm] shadow-2xl min-h-screen">
+            <h1 class="text-xl font-black mb-1 uppercase text-center">${schoolName}</h1>
+            <h2 class="text-lg font-bold mb-4 text-center underline uppercase">LAPORAN MATRIKS PENGHANTARAN eRPH (45 MINGGU)</h2>
+            <table class="border-collapse border border-black w-full text-center">
+              <thead class="bg-slate-50"><tr><th class="border border-black p-1 text-[9px] w-[150px] text-left">NAMA GURU</th>${MINGGU_LIST.map(m => `<th class="border border-black p-0 text-[7px]">${m.split(' ')[1]}</th>`).join('')}</tr></thead>
+              <tbody>${tableBody}</tbody>
+            </table>
+          </div>
+        </body>
+      </html>
+    `);
+    win.document.close();
+  };
+
+  const handleBulkAdd = async () => {
+    if (!bulkInput.text.trim()) return;
+    const rawLines = bulkInput.text.split('\n').map(i => i.trim()).filter(i => i !== "");
+    let newItems = rawLines;
+    if (bulkInput.type === 'sp') {
+        newItems = rawLines.map(line => ({ label: line, tunjang: bulkInput.selectedBidang }));
+    }
+    const currentList = dropdownOptions[bulkInput.type] || [];
+    const updatedList = [...currentList, ...newItems];
+    const kod = currentUserData.kodSekolah.toUpperCase();
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schools', kod, 'settings', 'dropdowns'), { ...dropdownOptions, [bulkInput.type]: updatedList });
+    setBulkInput({ ...bulkInput, text: '' });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const kod = currentUserData.kodSekolah.toUpperCase();
+      const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'schools', kod, 'erph_records');
+      if (editingId) {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schools', kod, 'erph_records', editingId), { ...formData, updatedAt: new Date().toISOString() });
+        setEditingId(null);
+      } else {
+        await addDoc(colRef, { ...formData, createdAt: new Date().toISOString(), signed: false, kodSekolah: kod });
+      }
+      setFormData({ ...initialFormState, nama: currentUserData.nama });
+    } catch (err) { console.error(err); } finally { setIsSubmitting(false); }
+  };
+
+  const performDeleteAction = async () => {
+    setIsSubmitting(true);
+    try {
+      const kod = currentUserData.kodSekolah.toUpperCase();
+      const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'schools', kod, 'erph_records');
+      let q;
+      const targetUser = currentUserData.role === 'admin' ? selectedUserToDelete : currentUserData.nama;
+      
+      if (!targetUser && deleteType !== 'all-users') { 
+        alert("Sila pilih guru terlebih dahulu.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (deleteType === 'day') {
+        q = query(colRef, where("nama", "==", targetUser), where("tarikh", "==", itemToDelete));
+      } else if (deleteType === 'week') {
+        q = query(colRef, where("nama", "==", targetUser), where("minggu", "==", itemToDelete));
+      } else if (deleteType === 'all') {
+        q = query(colRef, where("nama", "==", targetUser));
+      }
+
+      const snap = await getDocs(q);
+      const batch = writeBatch(db);
+      snap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      
+      setShowDeleteConfirm(false);
+      setDeleteType(null);
+      setItemToDelete(null);
+      if (deleteType === 'all' && selectedUserFolder === targetUser) setSelectedUserFolder(null);
+    } catch (err) { alert("Ralat padam: " + err.message); } finally { setIsSubmitting(false); }
+  };
+
+  const generateAiContent = async () => {
+    if (!formData.sp) return alert("Sila pilih Standard Pembelajaran (SP) terlebih dahulu.");
+    setIsAiGenerating(true);
+    try {
+      const prompt = `Berikan cadangan Objektif Pembelajaran dan Aktiviti Pembelajaran untuk Standard Pembelajaran (SP) berikut dalam bahasa Melayu. Format jawapan mestilah dalam JSON dengan key 'objektif' dan 'aktiviti'. SP: ${formData.sp}`;
+      
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json" }
+        })
+      });
+
+      const result = await response.json();
+      const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        const parsed = JSON.parse(text);
+        setFormData(prev => ({
+          ...prev,
+          objektif: parsed.objektif || prev.objektif,
+          aktiviti: parsed.aktiviti || prev.aktiviti
+        }));
+      }
+    } catch (err) {
+      alert("Gagal menjana kandungan AI. Sila cuba lagi.");
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
+
+  const handleLayeredInput = (e, field) => {
+    setFormData({ ...formData, [field]: e.target.value });
+  };
+
+  const toggleStrategi = (item) => {
+    const current = formData.strategi || [];
+    if (current.includes(item)) {
+      setFormData({ ...formData, strategi: current.filter(i => i !== item) });
+    } else {
+      setFormData({ ...formData, strategi: [...current, item] });
+    }
+  };
+
+  const saveWeeklySignature = async () => {
+    if (!selectedWeekForSign) return;
+    const sig = canvasRef.current.toDataURL('image/png');
+    const today = new Date().toLocaleDateString('ms-MY', { day: '2-digit', month: 'long', year: 'numeric' });
+    const weekRecords = records.filter(r => r.nama === selectedWeekForSign.nama && r.minggu === selectedWeekForSign.minggu);
+    try {
+      const kod = currentUserData.kodSekolah.toUpperCase();
+      const batch = writeBatch(db);
+      for (const r of weekRecords) {
+        const ref = doc(db, 'artifacts', appId, 'public', 'data', 'schools', kod, 'erph_records', r.id);
+        batch.update(ref, {
+          signed: true, 
+          signature: sig, 
+          dateSigned: today, 
+          signedByJawatan: adminJawatan,
+          signedByNama: adminNamaPenyemak.toUpperCase(),
+          adminExtraNote: adminExtraNote,
+          ulasan: adminUlasan,
+          submissionDate: today 
+        });
+      }
+      await batch.commit();
+      setSelectedWeekForSign(null); setAdminUlasan(""); setAdminExtraNote(""); setAdminNamaPenyemak("");
+    } catch (err) { console.error(err); }
+  };
+
+  const startDrawing = (e) => {
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+    const y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
+    ctx.beginPath(); ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = '#000'; ctx.moveTo(x, y);
+    setIsDrawing(true);
+  };
+
+  const draw = (e) => {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+    const y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
+    ctx.lineTo(x, y); ctx.stroke();
+  };
+
+  const usersWithRecords = Array.from(new Set(records.map(r => r.nama)));
+  const filteredRecords = records.filter(r => {
+    const matchMinggu = selectedMinggu === "Semua" || r.minggu === selectedMinggu;
+    if (currentUserData?.role === 'admin') return r.nama === selectedUserFolder && matchMinggu;
+    return r.nama === currentUserData?.nama && matchMinggu;
+  });
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 flex-col">
+        <div className="bg-white w-full max-w-sm rounded-3xl shadow-xl overflow-hidden">
+          <div className="bg-indigo-700 p-8 text-white text-center">
+            <h1 className="text-xl font-bold uppercase tracking-widest">eRPH PRASEKOLAH</h1>
+            <p className="text-xs opacity-70">Log Masuk</p>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+              <button onClick={() => setViewMode('guru')} className={`flex-1 py-2 rounded-lg text-xs font-bold ${viewMode === 'guru' ? 'bg-white shadow' : ''}`}>GURU</button>
+              <button onClick={() => setViewMode('admin')} className={`flex-1 py-2 rounded-lg text-xs font-bold ${viewMode === 'admin' ? 'bg-white shadow' : ''}`}>ADMIN</button>
+            </div>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <input type="text" value={loginInput.kodSekolah} onChange={e => setLoginInput({...loginInput, kodSekolah: e.target.value})} placeholder="Kod Sekolah (Cth: ABA1234)" className="w-full p-3 border-2 rounded-xl uppercase font-bold text-indigo-700" required />
+              <input type="text" value={loginInput.name} onChange={e => setLoginInput({...loginInput, name: e.target.value})} placeholder="Nama Penuh" className="w-full p-3 border-2 rounded-xl" required />
+              <input type="password" value={loginInput.password} onChange={e => setLoginInput({...loginInput, password: e.target.value})} placeholder={viewMode === 'admin' ? "Password" : "No IC"} className="w-full p-3 border-2 rounded-xl" required />
+              <button className="w-full bg-indigo-600 text-white p-3 rounded-xl font-bold uppercase">Masuk</button>
+            </form>
+          </div>
+        </div>
+        <footer className="text-center py-6 opacity-30 text-[8px] font-bold uppercase tracking-[0.5em] mt-2">
+          Powered By GB Akbar & Tn. Hj. Hazidan @2026 Hak Cipta Terpelihara
+        </footer>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 pb-20">
+      <nav className="bg-indigo-700 text-white p-4 sticky top-0 z-50 flex justify-between items-center shadow-lg">
+        <div className="flex items-center gap-2">
+           <div className="bg-white/20 p-2 rounded-lg"><User size={20}/></div>
+           <div className="text-xs uppercase font-bold">{currentUserData.nama || currentUserData.name} <br/><span className="text-[10px] opacity-60">{currentUserData.role} • {currentUserData.kodSekolah}</span></div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setActiveTab('records')} className={`p-2 rounded-lg ${activeTab === 'records' ? 'bg-white text-indigo-700' : ''}`}><Folder size={20}/></button>
+          <button onClick={() => setActiveTab('settings')} className={`p-2 rounded-lg ${activeTab === 'settings' ? 'bg-white text-indigo-700' : ''}`}><Settings size={20}/></button>
+          {currentUserData.role === 'admin' && <button onClick={() => setActiveTab('matrix')} className={`p-2 rounded-lg ${activeTab === 'matrix' ? 'bg-white text-indigo-700' : ''}`}><Grid size={20}/></button>}
+          <button onClick={handleLogout} className="bg-rose-500 p-2 rounded-lg"><LogOut size={20}/></button>
+        </div>
+      </nav>
+
+      <div className="p-4 max-w-5xl mx-auto space-y-6">
+        {activeTab === 'records' && currentUserData.role === 'guru' && (
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-indigo-100 flex flex-col items-center">
+            <h2 className="font-bold mb-4 flex items-center gap-2 text-indigo-700 w-full"><Plus size={18}/> {editingId ? "Edit RPH" : "Tambah RPH"}</h2>
+            <form onSubmit={handleSubmit} className="w-full space-y-4 max-w-3xl">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <select value={formData.minggu} onChange={e => setFormData({...formData, minggu: e.target.value})} className="p-3 border rounded-xl text-sm font-bold">{MINGGU_LIST.map(m => <option key={m}>{m}</option>)}</select>
+                <select value={formData.hari} onChange={e => setFormData({...formData, hari: e.target.value})} className="p-3 border rounded-xl text-sm font-bold">{HARI_LIST.map(h => <option key={h} value={h}>{h}</option>)}</select>
+                <input type="date" value={formData.tarikh} onChange={e => setFormData({...formData, tarikh: e.target.value})} className="p-3 border rounded-xl text-sm font-bold" />
+                <select value={formData.kelas} onChange={e => setFormData({...formData, kelas: e.target.value})} className="p-3 border rounded-xl text-sm font-bold">
+                  <option value="">Pilih Kelas</option>
+                  {dropdownOptions.kelas?.map((k, i) => <option key={i} value={k}>{k}</option>)}
+                </select>
+              </div>
+              
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Subjek</label>
+                <select value={formData.mataPelajaran} onChange={e => setFormData({...formData, mataPelajaran: e.target.value})} className="w-full p-3 border rounded-xl text-sm font-bold">
+                  <option value="">Pilih Subjek</option>
+                  {dropdownOptions.subjek?.map((s, i) => <option key={i} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Masa Mula</label><input type="time" value={formData.masaMula} onChange={e => setFormData({...formData, masaMula: e.target.value})} className="w-full p-3 border rounded-xl text-sm font-bold" /></div>
+                <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Masa Tamat</label><input type="time" value={formData.masaTamat} onChange={e => setFormData({...formData, masaTamat: e.target.value})} className="w-full p-3 border rounded-xl text-sm font-bold" /></div>
+              </div>
+              <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Tajuk RPH</label><input type="text" value={formData.tajuk} onChange={e => setFormData({...formData, tajuk: e.target.value})} placeholder="Masukkan Tajuk..." className="w-full p-3 border rounded-xl text-sm font-bold" /></div>
+              <div className="space-y-4">
+                <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Bidang Pembelajaran</label><select value={formData.tunjang} onChange={e => setFormData({...formData, tunjang: e.target.value})} className="w-full p-3 border rounded-xl text-xs font-bold"><option value="">Pilih Bidang Pembelajaran...</option>{TUNJANG_LIST.map((t,i) => <option key={i} value={t}>{t}</option>)}</select></div>
+                
+                <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Standard Pembelajaran (SP)</label>
+                    <select value={formData.sp} onChange={e => setFormData({...formData, sp: e.target.value})} className="w-full p-3 border rounded-xl text-xs font-bold mb-2">
+                        <option value="">Pilih SP...</option>
+                        {dropdownOptions.sp?.filter(item => typeof item === 'object' ? item.tunjang === formData.tunjang : true).map((o,i) => {
+                            const val = typeof o === 'object' ? o.label : o;
+                            return <option key={i} value={val}>{val}</option>
+                        })}
+                    </select>
+                    <button type="button" onClick={generateAiContent} disabled={isAiGenerating} className="flex items-center gap-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full hover:bg-indigo-100 disabled:opacity-50">
+                      <Sparkles size={12} className={isAiGenerating ? "animate-spin" : ""}/> {isAiGenerating ? "MENJANA..." : "JANA OBJEKTIF & AKTIVITI (AI)"}
+                    </button>
+                </div>
+
+                {['objektif', 'aktiviti', 'refleksi'].map(f => (
+                  <div key={f} className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">{f}</label>
+                    <textarea 
+                      value={formData[f]} 
+                      onChange={e => handleLayeredInput(e, f)} 
+                      placeholder={`Taip ${f}...`} 
+                      className="w-full p-3 border rounded-xl text-sm font-bold h-24 leading-relaxed"
+                    />
+                    {f === 'aktiviti' && (
+                        <div className="mt-2 flex flex-col space-y-2">
+                          <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Sumber Pendidikan</label>
+                          <div className="flex flex-wrap gap-3 p-3 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                             {STRATEGI_LIST.map(s => (
+                               <button type="button" key={s} onClick={() => toggleStrategi(s)} className="flex items-center gap-2">
+                                  {formData.strategi?.includes(s) ? <CheckSquare size={16} className="text-indigo-600"/> : <Square size={16} className="text-slate-400"/>}
+                                  <span className="text-[10px] font-bold uppercase text-slate-600">{s}</span>
+                               </button>
+                             ))}
+                          </div>
+                        </div>
+                    )}
+                  </div>
+                ))}
+                
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Pentaksiran</label>
+                  <select value={formData.pentaksiran} onChange={e => setFormData({...formData, pentaksiran: e.target.value})} className="w-full p-3 border rounded-xl text-sm font-bold">
+                    <option value="Ditaksir">Ditaksir</option>
+                    <option value="Tidak Ditaksir">Tidak Ditaksir</option>
+                  </select>
+                </div>
+              </div>
+              <button disabled={isSubmitting} className="w-full bg-indigo-600 text-white p-4 rounded-xl font-bold uppercase shadow-lg">Simpan Rekod</button>
+            </form>
+          </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <div className="bg-white p-6 rounded-3xl shadow-sm space-y-6">
+            <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+               <h2 className="font-bold text-indigo-700 flex items-center gap-2 mb-2"><School size={18}/> Tetapan Sekolah ({currentUserData.kodSekolah})</h2>
+               <div className="flex gap-2"><input type="text" value={schoolName} onChange={e => setSchoolName(e.target.value)} className="flex-1 p-2 border rounded-lg text-sm font-bold uppercase" /><button onClick={handleSaveSchoolName} className="bg-indigo-600 text-white px-4 rounded-lg font-bold text-xs uppercase shadow-md">Simpan</button></div>
+            </div>
+            
+            <h2 className="font-bold text-indigo-700 flex items-center gap-2"><Settings size={18}/> Pengurusan Dropdown (Pukal)</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-slate-50 p-4 rounded-2xl space-y-3">
+                <select value={bulkInput.type} onChange={e => setBulkInput({...bulkInput, type: e.target.value})} className="w-full p-2 border rounded-lg text-xs font-bold">
+                  <option value="subjek">Subjek</option>
+                  <option value="sp">SP</option>
+                  <option value="objektif">Objektif</option>
+                  <option value="aktiviti">Aktiviti</option>
+                  <option value="refleksi">Refleksi</option>
+                  <option value="kelas">Kelas</option>
+                </select>
+                {bulkInput.type === 'sp' && (
+                    <select value={bulkInput.selectedBidang} onChange={e => setBulkInput({...bulkInput, selectedBidang: e.target.value})} className="w-full p-2 border rounded-lg text-xs font-bold mb-2">
+                        {TUNJANG_LIST.map((t,i) => <option key={i} value={t}>{t}</option>)}
+                    </select>
+                )}
+                <textarea value={bulkInput.text} onChange={e => setBulkInput({...bulkInput, text: e.target.value})} placeholder="Tampalkan data di sini..." className="w-full h-40 p-3 border rounded-lg text-xs" />
+                <button onClick={handleBulkAdd} className="w-full bg-indigo-600 text-white py-3 rounded-xl text-xs font-bold uppercase">Simpan Data Pukal</button>
+              </div>
+              <div className="max-h-[300px] overflow-y-auto space-y-2 border p-3 rounded-2xl bg-white">
+                {['subjek', 'sp', 'objektif', 'aktiviti', 'refleksi', 'kelas'].map(type => (<div key={type} className="mb-4"><p className="text-[10px] font-bold text-indigo-600 bg-indigo-50 p-1 px-2 rounded-full inline-block uppercase mb-2">{type}</p>{dropdownOptions[type]?.map((o,i) => (<div key={i} className="flex justify-between items-center p-2 bg-slate-50 border rounded-lg mb-1 text-[9px]"><span className="truncate flex-1 pr-2">{typeof o === 'object' ? `${o.label} (${o.tunjang})` : o}</span><button onClick={async () => { const list = [...dropdownOptions[type]]; list.splice(i, 1); const kod = currentUserData.kodSekolah.toUpperCase(); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schools', kod, 'settings', 'dropdowns'), {...dropdownOptions, [type]: list}); }} className="text-rose-500"><Trash2 size={12}/></button></div>))}</div>))}
+              </div>
+            </div>
+
+            <div className="border-t-2 border-rose-100 pt-6 mt-6">
+              <div className="bg-rose-50 p-4 rounded-2xl border border-rose-200">
+                <h2 className="font-bold text-rose-700 flex items-center gap-2 mb-2"><AlertTriangle size={18}/> ZON BAHAYA</h2>
+                <div className="flex flex-col gap-3">
+                    {currentUserData.role === 'admin' && (
+                       <select value={selectedUserToDelete} onChange={(e) => setSelectedUserToDelete(e.target.value)} className="w-full p-3 border border-rose-200 rounded-xl text-sm font-bold bg-white">
+                         <option value="">-- Pilih Guru --</option>
+                         {usersWithRecords.map(u => <option key={u} value={u}>{u}</option>)}
+                       </select>
+                    )}
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white/50 p-4 rounded-2xl border border-rose-100">
+                       <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase text-slate-500">Padam Rekod Harian (Pilih Tarikh)</label>
+                          <div className="flex gap-2">
+                             <input type="date" value={dateToDeleteSelection} onChange={e => setDateToDeleteSelection(e.target.value)} className="flex-1 p-2 border rounded-xl text-xs font-bold" />
+                             <button onClick={() => { setDeleteType('day'); setItemToDelete(dateToDeleteSelection); setShowDeleteConfirm(true); }} className="bg-rose-600 text-white px-3 rounded-xl font-bold text-[10px] uppercase shadow-sm">Padam</button>
+                          </div>
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase text-slate-500">Padam Rekod Mingguan (Pilih Minggu)</label>
+                          <div className="flex gap-2">
+                            <select value={weekToDeleteSelection} onChange={e => setWeekToDeleteSelection(e.target.value)} className="flex-1 p-2 border rounded-xl text-xs font-bold">
+                              {MINGGU_LIST.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                            <button onClick={() => { setDeleteType('week'); setItemToDelete(weekToDeleteSelection); setShowDeleteConfirm(true); }} className="bg-rose-600 text-white px-3 rounded-xl font-bold text-[10px] uppercase shadow-sm">Padam</button>
+                          </div>
+                       </div>
+                    </div>
+                    
+                    <button onClick={() => { setDeleteType('all'); setItemToDelete(currentUserData.role === 'admin' ? selectedUserToDelete : currentUserData.nama); setShowDeleteConfirm(true); }} className="w-full bg-rose-600 text-white p-4 rounded-xl font-bold uppercase shadow-lg text-xs">Hapus Semua Data Folder Guru Terpilih</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'matrix' && currentUserData.role === 'admin' && (
+          <div className="bg-white p-6 rounded-3xl shadow-sm overflow-hidden">
+             <div className="flex justify-between items-center mb-4"><h2 className="font-bold text-indigo-700">Matriks Penghantaran</h2><button onClick={handlePrintMatrix} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-2"><Printer size={16}/> Cetak Matriks</button></div>
+             <div className="overflow-x-auto rounded-xl border border-slate-100">
+                <table className="w-full text-left border-collapse text-[10px]">
+                   <thead className="bg-indigo-50 font-bold uppercase"><tr><th className="p-3 border-b sticky left-0 bg-indigo-50 z-10 w-24">Nama</th>{MINGGU_LIST.map(m => <th key={m} className="p-3 border-b text-center min-w-[50px]">{m.split(' ')[1]}</th>)}</tr></thead>
+                   <tbody>{usersWithRecords.map(name => (<tr key={name} className="hover:bg-slate-50 border-b"><td className="p-3 sticky left-0 bg-white font-bold uppercase whitespace-nowrap">{name}</td>{MINGGU_LIST.map(m => { const recs = records.filter(r => r.nama === name && r.minggu === m); const allSigned = recs.length > 0 && recs.every(r => r.signed); return (<td key={m} className="p-2 text-center">{recs.length > 0 ? (<button onClick={() => { setSelectedUserFolder(name); setSelectedMinggu(m); setActiveTab('records'); }} className={`w-6 h-6 rounded-lg flex items-center justify-center mx-auto ${allSigned ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-white animate-pulse'}`}>{allSigned ? <ShieldCheck size={12}/> : recs.length}</button>) : <div className="w-2 h-2 rounded-full bg-slate-200 mx-auto"></div>}</td>); })}</tr>))}</tbody>
+                </table>
+             </div>
+          </div>
+        )}
+
+        {activeTab === 'records' && (
+          <div className="space-y-4">
+             <div className="flex justify-between items-center px-1">
+                <h3 className="text-xs font-bold uppercase text-slate-400">Senarai Rekod</h3>
+                {currentUserData.role === 'admin' && selectedUserFolder && (
+                  <div className="flex gap-2">
+                    <button onClick={() => setSelectedWeekForSign({nama: selectedUserFolder, minggu: selectedMinggu === "Semua" ? MINGGU_LIST[0] : selectedMinggu})} className="text-[10px] font-bold bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full uppercase flex items-center gap-1"><CheckCircle size={12}/> Semak Folder</button>
+                    <button onClick={() => setSelectedUserFolder(null)} className="text-[10px] font-bold bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full uppercase">Utama</button>
+                  </div>
+                )}
+             </div>
+             {currentUserData.role === 'admin' && !selectedUserFolder ? (
+               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{usersWithRecords.map(name => (<button key={name} onClick={() => setSelectedUserFolder(name)} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center gap-2 active:scale-95 transition-all"><div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center"><User size={24}/></div><p className="text-[10px] font-bold uppercase truncate w-full text-center">{name}</p></button>))}</div>
+             ) : (
+               <div className="space-y-3">
+                 <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{["Semua", ...MINGGU_LIST].map(m => (<button key={m} onClick={() => setSelectedMinggu(m)} className={`px-4 py-1.5 rounded-full text-[9px] font-bold uppercase border-2 ${selectedMinggu === m ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200 text-slate-400'}`}>{m}</button>))}</div>
+                 {filteredRecords.sort((a,b) => new Date(b.tarikh) - new Date(a.tarikh)).map(record => (
+                     <div key={record.id} className="bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col items-center">
+                       <div onClick={() => setExpandedRecordId(expandedRecordId === record.id ? null : record.id)} className="p-4 w-full flex items-center justify-between cursor-pointer"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold text-white ${record.signed ? 'bg-emerald-500' : 'bg-amber-400'}`}>{record.minggu.split(' ')[1]}</div><div><p className="text-xs font-bold uppercase">{record.nama}</p><p className="text-[8px] opacity-50 uppercase">{record.hari ? `${record.hari}, ` : ''}{record.tarikh} • {record.kelas} • {record.pentaksiran || 'Ditaksir'}</p></div></div>{record.signed ? <ShieldCheck size={16} className="text-emerald-500"/> : <ChevronDown size={16}/>}</div>
+                       {expandedRecordId === record.id && (
+                         <div className="p-4 w-full bg-slate-50 border-t space-y-3 text-[10px] flex flex-col items-center">
+                            <div className="grid grid-cols-2 gap-2 w-full max-w-2xl">
+                                <div className="bg-white p-2 rounded-lg border"><strong>Hari:</strong> {record.hari || '-'}</div>
+                                <div className="bg-white p-2 rounded-lg border"><strong>Masa:</strong> {record.masaMula} - {record.masaTamat}</div>
+                                <div className="bg-white p-2 rounded-lg border col-span-2"><strong>Tajuk:</strong> {record.tajuk}</div>
+                                <div className="bg-white p-2 rounded-lg border col-span-2"><strong>Subjek:</strong> {record.mataPelajaran || '-'}</div>
+                                {record.strategi && (
+                                   <div className="bg-white p-2 rounded-lg border col-span-2"><strong>Sumber Pendidikan:</strong> {record.strategi.join(', ')}</div>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 w-full max-w-2xl"><div className="bg-white p-2 rounded-lg border"><strong>Tunjang:</strong> {record.tunjang}</div><div className="bg-white p-2 rounded-lg border"><strong>SP:</strong> {record.sp}</div></div>
+                            <div className="bg-white p-2 rounded-lg border w-full max-w-2xl"><strong>OBJEKTIF:</strong> <pre className="font-sans whitespace-pre-wrap">{record.objektif}</pre></div>
+                            <div className="bg-white p-2 rounded-lg border w-full max-w-2xl"><strong>AKTIVITI:</strong> <pre className="font-sans whitespace-pre-wrap">{record.aktiviti}</pre></div>
+                            <div className="bg-indigo-50 p-2 rounded-lg border border-indigo-100 w-full max-w-2xl"><strong>REFLEKSI:</strong> <pre className="font-sans whitespace-pre-wrap">{record.refleksi}</pre></div>
+                            <div className="flex gap-2 pt-2 w-full max-w-2xl"><button onClick={() => handlePrint(record)} className="flex-1 bg-white border p-2.5 rounded-xl flex items-center justify-center gap-2 font-bold uppercase shadow-sm active:scale-95"><Printer size={14}/> Cetak</button>{currentUserData.role === 'guru' && !record.signed && (<><button onClick={() => { setEditingId(record.id); setFormData(record); setExpandedRecordId(null); window.scrollTo(0,0); }} className="bg-white border p-2.5 rounded-xl text-indigo-600"><Edit3 size={14}/></button></>)}</div>
+                         </div>
+                       )}
+                     </div>
+                   ))
+                 }
+               </div>
+             )}
+          </div>
+        )}
+      </div>
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto"><AlertTriangle size={32}/></div>
+            <div className="text-center">
+              <h3 className="text-lg font-black uppercase">PENGESAHAN HAPUS</h3>
+              <p className="text-xs text-slate-500 font-bold uppercase mt-1">Sila sahkan tindakan memadam rekod berikut:</p>
+              <div className="bg-slate-50 p-3 rounded-xl mt-3 text-[10px] font-bold text-rose-700 border border-rose-100">
+                {deleteType === 'day' ? `Harian: ${itemToDelete}` : deleteType === 'week' ? `Mingguan: ${itemToDelete}` : `Seluruh Folder Guru: ${itemToDelete}`}
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button onClick={performDeleteAction} disabled={isSubmitting} className="w-full bg-rose-600 text-white py-3 rounded-xl font-black text-xs uppercase shadow-lg active:scale-95 disabled:opacity-50">
+                {isSubmitting ? 'MEMADAM...' : 'YA, SAHKAN HAPUS'}
+              </button>
+              <button onClick={() => { setShowDeleteConfirm(false); setDeleteType(null); setItemToDelete(null); }} className="w-full bg-slate-100 text-slate-500 py-3 rounded-xl font-bold text-xs uppercase">BATAL</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedWeekForSign && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-sm flex items-end sm:items-center justify-center">
+          <div className="bg-white w-full max-w-lg sm:rounded-3xl rounded-t-3xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-amber-600 p-5 text-white flex justify-between items-center"><div><h3 className="text-sm font-bold uppercase">Semakan Folder Mingguan</h3><p className="text-[10px] opacity-70 uppercase">{selectedWeekForSign.nama} • {selectedWeekForSign.minggu}</p></div><button onClick={() => setSelectedWeekForSign(null)} className="p-1"><X size={20}/></button></div>
+            <div className="p-5 space-y-4 overflow-y-auto flex flex-col items-center">
+              <div className="w-full space-y-3">
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Ulasan Semakan</label>
+                    <textarea value={adminUlasan} onChange={e => setAdminUlasan(e.target.value)} placeholder="Tulis ulasan semakan di sini..." className="w-full h-32 p-3 border rounded-xl text-sm font-bold outline-none bg-slate-50 leading-relaxed shadow-inner" />
+                 </div>
+
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Jawatan Penyemak</label>
+                    <select value={adminJawatan} onChange={e => setAdminJawatan(e.target.value)} className="w-full p-3 border rounded-xl text-sm font-bold outline-none bg-slate-50">
+                       {JAWATAN_ADMIN.map(j => <option key={j} value={j}>{j}</option>)}
+                    </select>
+                 </div>
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Nama Penyemak (Huruf Besar)</label>
+                    <input type="text" value={adminNamaPenyemak} onChange={e => setAdminNamaPenyemak(e.target.value.toUpperCase())} placeholder="NAMA PENUH PENYEMAK..." className="w-full p-3 border rounded-xl text-sm font-bold outline-none bg-slate-50 uppercase" />
+                 </div>
+              </div>
+              
+              <div className="space-y-1 w-full flex flex-col items-center"><div className="border-2 rounded-xl h-40 w-full bg-white touch-none overflow-hidden relative shadow-inner"><canvas ref={canvasRef} width={400} height={200} className="w-full h-full" onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={() => setIsDrawing(false)} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={() => setIsDrawing(false)} /></div></div>
+              <button onClick={saveWeeklySignature} className="w-full bg-emerald-600 text-white p-4 rounded-2xl font-bold uppercase text-xs shadow-lg mt-4 mb-2">Sahkan & Tandatangan Folder</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
